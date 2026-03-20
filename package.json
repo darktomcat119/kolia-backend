@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "start": "npm run build && node dist/index.js",
     "build": "tsc",
     "lint": "eslint src/",
     "check-supabase": "node scripts/check-supabase.mjs"
@@ -17,12 +17,12 @@
     "hono": "^4.7.4",
     "jose": "^6.1.3",
     "stripe": "^17.6.0",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "@types/node": "^22.13.4",
+    "typescript": "~5.7.3"
   },
   "devDependencies": {
-    "@types/node": "^22.13.4",
-    "tsx": "^4.19.3",
-    "typescript": "~5.7.3"
+    "tsx": "^4.19.3"
   },
   "private": true
 }
