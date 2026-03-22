@@ -245,6 +245,54 @@ admin.post('/upload/restaurant-image', async (c) => {
   }
 });
 
+// POST /api/admin/upload/menu-item-image — dish photo for any restaurant (admin)
+admin.post('/upload/menu-item-image', async (c) => {
+  try {
+    const body = await c.req.parseBody();
+    const file = body['file'];
+    const restaurantId = (body['restaurant_id'] as string) || '';
+
+    if (!restaurantId) {
+      return c.json({ error: 'restaurant_id is required', code: 'VALIDATION_ERROR' }, 400);
+    }
+
+    const { data: exists } = await supabaseAdmin
+      .from('restaurants')
+      .select('id')
+      .eq('id', restaurantId)
+      .single();
+
+    if (!exists) {
+      return c.json({ error: 'Restaurant not found', code: 'NOT_FOUND' }, 404);
+    }
+
+    if (!file || typeof file === 'string') {
+      return c.json({ error: 'Missing file', code: 'VALIDATION_ERROR' }, 400);
+    }
+
+    const f = file as File;
+    if (f.size > MAX_FILE_SIZE) {
+      return c.json({ error: 'File too large (max 5 MB)', code: 'VALIDATION_ERROR' }, 400);
+    }
+    if (!ALLOWED_TYPES.includes(f.type)) {
+      return c.json({ error: 'Invalid type (use JPEG, PNG or WebP)', code: 'VALIDATION_ERROR' }, 400);
+    }
+
+    const ext = f.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg';
+    const timestamp = Date.now();
+    const path = `menu-item/${restaurantId}/${timestamp}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
+
+    const arrayBuffer = await f.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const { url } = await uploadRestaurantImage(buffer, f.type, path);
+    return c.json({ data: { url } });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : 'Upload failed', code: 'UPLOAD_ERROR' }, 500);
+  }
+});
+
 // ============================================
 // CATEGORIES
 // ============================================

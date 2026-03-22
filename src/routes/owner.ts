@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
 import { ownerAuthMiddleware } from '../middleware/ownerAuth.js';
-import { authMiddleware } from '../middleware/auth.js';
 import { supabaseAdmin } from '../lib/supabase.js';
+import { uploadRestaurantImage } from '../lib/upload.js';
 import { createRestaurantSchema, createCategorySchema, createMenuItemSchema, updateOrderStatusSchema } from '../types/index.js';
+
+const OWNER_MAX_UPLOAD = 5 * 1024 * 1024;
+const OWNER_ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 const owner = new Hono();
 
@@ -331,6 +334,57 @@ owner.delete('/categories/:id', async (c) => {
   const { error } = await supabaseAdmin.from('menu_categories').delete().eq('id', id);
   if (error) return c.json({ error: error.message }, 500);
   return c.json({ data: { success: true } });
+});
+
+// ============================================
+// UPLOAD (menu item images — own restaurant only)
+// ============================================
+
+// POST /api/owner/upload/menu-item-image — returns public URL
+owner.post('/upload/menu-item-image', async (c) => {
+  try {
+    const user = c.get('user');
+    const body = await c.req.parseBody();
+    const file = body['file'];
+    const restaurantId = (body['restaurant_id'] as string) || '';
+
+    if (!restaurantId) {
+      return c.json({ error: 'restaurant_id is required', code: 'VALIDATION_ERROR' }, 400);
+    }
+
+    const { data: restaurant } = await supabaseAdmin
+      .from('restaurants')
+      .select('id, owner_id')
+      .eq('id', restaurantId)
+      .single();
+
+    if (!restaurant || restaurant.owner_id !== user.id) {
+      return c.json({ error: 'Not authorized', code: 'FORBIDDEN' }, 403);
+    }
+
+    if (!file || typeof file === 'string') {
+      return c.json({ error: 'Missing file', code: 'VALIDATION_ERROR' }, 400);
+    }
+
+    const f = file as File;
+    if (f.size > OWNER_MAX_UPLOAD) {
+      return c.json({ error: 'File too large (max 5 MB)', code: 'VALIDATION_ERROR' }, 400);
+    }
+    if (!OWNER_ALLOWED_IMAGE_TYPES.includes(f.type as (typeof OWNER_ALLOWED_IMAGE_TYPES)[number])) {
+      return c.json({ error: 'Invalid type (use JPEG, PNG or WebP)', code: 'VALIDATION_ERROR' }, 400);
+    }
+
+    const ext = f.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'jpg';
+    const timestamp = Date.now();
+    const path = `menu-item/${restaurantId}/${timestamp}-${Math.random().toString(36).slice(2, 10)}.${safeExt}`;
+
+    const buffer = Buffer.from(await f.arrayBuffer());
+    const { url } = await uploadRestaurantImage(buffer, f.type, path);
+    return c.json({ data: { url } });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : 'Upload failed', code: 'UPLOAD_ERROR' }, 500);
+  }
 });
 
 // ============================================
