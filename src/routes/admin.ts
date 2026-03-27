@@ -417,4 +417,68 @@ admin.delete('/items/:id', async (c) => {
   return c.json({ data: { message: 'Item deleted' } });
 });
 
+// ============================================
+// LANDING PAGE CONTENT
+// ============================================
+
+// GET /api/admin/landing-content/:locale — Fetch CMS content for a locale
+admin.get('/landing-content/:locale', async (c) => {
+  const locale = c.req.param('locale');
+
+  if (!['en', 'fr', 'pt'].includes(locale)) {
+    return c.json({ error: 'Invalid locale. Must be en, fr or pt.', code: 'VALIDATION_ERROR' }, 400);
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('landing_page_content')
+    .select('locale, content, is_active, updated_at')
+    .eq('locale', locale)
+    .maybeSingle();
+
+  if (error) {
+    return c.json({ error: 'Failed to fetch landing content', code: 'FETCH_ERROR' }, 500);
+  }
+
+  return c.json({ data: data ?? null });
+});
+
+// PUT /api/admin/landing-content/:locale — Upsert CMS content for a locale
+admin.put('/landing-content/:locale', async (c) => {
+  const locale = c.req.param('locale');
+
+  if (!['en', 'fr', 'pt'].includes(locale)) {
+    return c.json({ error: 'Invalid locale. Must be en, fr or pt.', code: 'VALIDATION_ERROR' }, 400);
+  }
+
+  const body = await c.req.json<{ content: unknown; is_active: boolean }>();
+
+  if (!body.content || typeof body.content !== 'object') {
+    return c.json({ error: 'content must be a JSON object', code: 'VALIDATION_ERROR' }, 400);
+  }
+
+  const { data: session } = await supabaseAdmin.auth.getUser(
+    c.req.header('Authorization')?.replace('Bearer ', '') ?? '',
+  );
+
+  const { data, error } = await supabaseAdmin
+    .from('landing_page_content')
+    .upsert(
+      {
+        locale,
+        content: body.content,
+        is_active: body.is_active ?? true,
+        updated_by: session.user?.id ?? null,
+      },
+      { onConflict: 'locale' },
+    )
+    .select('locale, content, is_active, updated_at')
+    .single();
+
+  if (error) {
+    return c.json({ error: 'Failed to save landing content', code: 'UPSERT_ERROR' }, 500);
+  }
+
+  return c.json({ data });
+});
+
 export default admin;
