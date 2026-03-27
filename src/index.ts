@@ -8,6 +8,7 @@ import { serve } from '@hono/node-server';
 import orders from './routes/orders.js';
 import admin from './routes/admin.js';
 import owner from './routes/owner.js';
+import pub from './routes/public.js';
 import webhooks from './routes/webhooks.js';
 import notifications from './routes/notifications.js';
 import { checkTcpConnectivity, getSupabaseHostFromEnv } from './lib/supabaseConnectivity.js';
@@ -19,10 +20,12 @@ app.use('*', logger());
 const corsOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:5175',
   'http://localhost:8081',
   'http://localhost:19006',
   'http://127.0.0.1:5173',
   'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175',
 ];
 // Add VPS / production origin from env (e.g. http://45.55.175.194 or https://yourdomain.com)
 if (process.env.CORS_ORIGIN) {
@@ -35,7 +38,7 @@ app.use(
   '*',
   cors({
     origin: corsOrigins,
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   }),
 );
@@ -48,6 +51,7 @@ app.get('/health', (c) => c.json({ status: 'ok' }));
 app.route('/api/orders', orders);
 app.route('/api/admin', admin);
 app.route('/api/owner', owner);
+app.route('/api/public', pub);
 app.route('/api/webhooks', webhooks);
 app.route('/api/notifications', notifications);
 
