@@ -421,6 +421,78 @@ admin.delete('/items/:id', async (c) => {
 // LANDING PAGE CONTENT
 // ============================================
 
+// GET /api/admin/landing-content/media-library — All images usable as hero slides
+admin.get('/landing-content/media-library', async (c) => {
+  const [{ data: restaurants, error: rErr }, { data: dishes, error: dErr }] =
+    await Promise.all([
+      supabaseAdmin
+        .from('restaurants')
+        .select('id, name, image_url, gallery_urls')
+        .order('name'),
+      supabaseAdmin
+        .from('menu_items')
+        .select('id, name, image_url, restaurant_id')
+        .not('image_url', 'is', null)
+        .order('name'),
+    ]);
+
+  if (rErr) return c.json({ error: 'Failed to fetch restaurants', code: 'FETCH_ERROR' }, 500);
+  if (dErr) return c.json({ error: 'Failed to fetch dishes', code: 'FETCH_ERROR' }, 500);
+
+  const normalizeUrlArray = (value: unknown): string[] => {
+    if (Array.isArray(value))
+      return value.filter((x): x is string => typeof x === 'string' && !!x.trim());
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value) as unknown;
+        if (Array.isArray(parsed))
+          return parsed.filter((x): x is string => typeof x === 'string' && !!x.trim());
+      } catch {
+        return value.split(',').map((s) => s.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  };
+
+  type MediaAsset = {
+    id: string;
+    type: 'restaurant' | 'dish' | 'gallery';
+    label: string;
+    source: string;
+    url: string;
+  };
+
+  const restaurantMap = new Map<string, string>();
+  const assets: MediaAsset[] = [];
+
+  for (const r of (restaurants ?? []) as Array<{
+    id: string; name: string; image_url: string | null; gallery_urls: unknown;
+  }>) {
+    restaurantMap.set(r.id, r.name);
+    if (r.image_url) {
+      assets.push({ id: `restaurant-${r.id}`, type: 'restaurant', label: r.name, source: 'Restaurant cover', url: r.image_url });
+    }
+    for (const g of normalizeUrlArray(r.gallery_urls)) {
+      assets.push({ id: `gallery-${r.id}-${g.slice(-12)}`, type: 'gallery', label: r.name, source: 'Restaurant gallery', url: g });
+    }
+  }
+
+  for (const d of (dishes ?? []) as Array<{
+    id: string; name: string; image_url: string | null; restaurant_id: string | null;
+  }>) {
+    if (!d.image_url) continue;
+    assets.push({
+      id: `dish-${d.id}`,
+      type: 'dish',
+      label: d.name,
+      source: restaurantMap.get(d.restaurant_id ?? '') ?? 'Dish image',
+      url: d.image_url,
+    });
+  }
+
+  return c.json({ data: assets });
+});
+
 // GET /api/admin/landing-content/:locale — Fetch CMS content for a locale
 admin.get('/landing-content/:locale', async (c) => {
   const locale = c.req.param('locale');
