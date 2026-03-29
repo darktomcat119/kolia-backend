@@ -11,6 +11,7 @@ import owner from './routes/owner.js';
 import pub from './routes/public.js';
 import webhooks from './routes/webhooks.js';
 import notifications from './routes/notifications.js';
+import favorites from './routes/favorites.js';
 import { checkTcpConnectivity, getSupabaseHostFromEnv } from './lib/supabaseConnectivity.js';
 
 const app = new Hono();
@@ -54,6 +55,7 @@ app.route('/api/owner', owner);
 app.route('/api/public', pub);
 app.route('/api/webhooks', webhooks);
 app.route('/api/notifications', notifications);
+app.route('/api/favorites', favorites);
 
 // 404 handler
 app.notFound((c) => c.json({ error: 'Not found', code: 'NOT_FOUND' }, 404));
